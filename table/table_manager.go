@@ -127,6 +127,27 @@ func (manager *TableManager) GetRFlist() []bgp.RouteFamily {
 	return manager.rfList
 }
 
+func (manager *TableManager) FetchExistingVrf(name string) (*Table, uint32) {
+	// Lookup existing table.
+	tbl, ok := manager.Tables[bgp.RF_IPv4_VPN]
+	if !ok {
+		fmt.Printf("address family: %s not supported\n", bgp.RF_IPv4_VPN)
+		return nil, 0
+	}
+	vrf := manager.Vrfs[name]
+	if vrf == nil {
+		fmt.Printf("vrf %s does not exists\n", name)
+		return nil, 0
+	}
+	rib, err := tbl.Select(TableSelectOption{VRF: vrf, Best: true})
+	if err != nil {
+		fmt.Println("tbl.Select err", err)
+		return nil, 0
+	}
+	fmt.Println("RIB lookup success")
+	return rib, vrf.Id
+}
+
 func (manager *TableManager) AddVrf(name string, id uint32, rd bgp.RouteDistinguisherInterface, importRt, exportRt []bgp.ExtendedCommunityInterface, info *PeerInfo) ([]*Path, error) {
 	if _, ok := manager.Vrfs[name]; ok {
 		return nil, fmt.Errorf("vrf %s already exists", name)

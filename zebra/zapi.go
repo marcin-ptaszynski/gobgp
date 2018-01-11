@@ -624,6 +624,7 @@ func NewClient(network, address string, typ ROUTE_TYPE, version uint8) (*Client,
 	go func() {
 		for {
 			if m, err := receiveSingleMsg(); err != nil {
+				close(incoming)
 				return
 			} else if m != nil {
 				incoming <- m

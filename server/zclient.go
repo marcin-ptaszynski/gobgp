@@ -17,15 +17,17 @@ package server
 
 import (
 	"fmt"
-	"github.com/osrg/gobgp/packet/bgp"
-	"github.com/osrg/gobgp/table"
-	"github.com/osrg/gobgp/zebra"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/osrg/gobgp/config"
+	"github.com/osrg/gobgp/packet/bgp"
+	"github.com/osrg/gobgp/table"
+	"github.com/osrg/gobgp/zebra"
+	log "github.com/sirupsen/logrus"
 )
 
 type pathList []*table.Path
@@ -54,6 +56,7 @@ func newNexthopTrackingManager(server *BgpServer, delay int) *nexthopTrackingMan
 }
 
 func (m *nexthopTrackingManager) stop() {
+	fmt.Println("nexthopTrackingManager stop is called")
 	close(m.pathListCh)
 	close(m.trigger)
 	close(m.dead)
@@ -101,9 +104,7 @@ func (m *nexthopTrackingManager) calculateDelay(penalty int) int {
 	return delay
 }
 
-func (m *nexthopTrackingManager) triggerUpdatePathAfter(delay int) {
-	time.Sleep(time.Duration(delay) * time.Second)
-
+func (m *nexthopTrackingManager) triggerUpdatePathAfter() {
 	m.trigger <- struct{}{}
 }
 
@@ -142,7 +143,13 @@ func (m *nexthopTrackingManager) loop() {
 			}
 
 			delay := m.calculateDelay(penalty)
-			go m.triggerUpdatePathAfter(delay)
+			fmt.Println("triggerUpdatePathAfter is scheduled", delay)
+			triggerTimer := time.AfterFunc(time.Duration(delay)*time.Second, m.triggerUpdatePathAfter)
+			defer func() {
+				fmt.Println("triggerdUpdatePathAfter is cancelled")
+				triggerTimer.Stop()
+			}()
+			//go m.triggerUpdatePathAfter(delay)
 			log.WithFields(log.Fields{
 				"Topic": "Zebra",
 				"Event": "Nexthop Tracking",
@@ -433,10 +440,31 @@ type zebraClient struct {
 	server     *BgpServer
 	dead       chan struct{}
 	nhtManager *nexthopTrackingManager
+	watcher    *Watcher
+	config     config.ZebraConfig
 }
 
 func (z *zebraClient) stop() {
 	close(z.dead)
+}
+
+func (z *zebraClient) SendPaths(paths []*table.Path) {
+	if z.watcher == nil {
+		return
+	}
+	z.watcher.realCh <- &WatchEventBestPath{
+		PathList: paths,
+	}
+}
+
+func (z *zebraClient) reconnect() {
+	for {
+		time.Sleep(time.Second * 3)
+		err := z.server.StartZebraClient(&z.config)
+		if err == nil {
+			return
+		}
+	}
 }
 
 func (z *zebraClient) loop() {
@@ -444,6 +472,7 @@ func (z *zebraClient) loop() {
 		WatchBestPath(true),
 		WatchPostUpdate(true),
 	}...)
+	z.watcher = w
 	defer w.Stop()
 
 	if z.nhtManager != nil {
@@ -451,11 +480,37 @@ func (z *zebraClient) loop() {
 		defer z.nhtManager.stop()
 	}
 
+	go func() {
+		if z.server.globalRib == nil {
+			fmt.Println("z.server.globalRib is not ready")
+			return
+		}
+
+		for _, vrf := range z.server.globalRib.Vrfs {
+			tbl, _ := z.server.globalRib.FetchExistingVrf(vrf.Name)
+			if tbl != nil {
+				for _, dst := range tbl.GetDestinations() {
+					paths := dst.GetAllKnownPathList()
+					if len(paths) == 1 {
+						path := paths[0]
+						path.VrfIds = []uint16{uint16(vrf.Id)}
+					}
+					z.SendPaths(paths)
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-z.dead:
 			return
 		case msg := <-z.client.Receive():
+			if msg == nil {
+				z.server.zclient = nil
+				go z.reconnect()
+				return
+			}
 			switch body := msg.Body.(type) {
 			case *zebra.IPRouteBody:
 				if p := createPathFromIPRouteMessage(msg); p != nil {
@@ -518,7 +573,7 @@ func newZebraClient(s *BgpServer, url string, protos []string, version uint8, nh
 	}
 	var cli *zebra.Client
 	var err error
-	for _, ver := range []uint8{version, 2, 3, 4} {
+	for _, ver := range []uint8{version} {
 		cli, err = zebra.NewClient(l[0], l[1], zebra.ROUTE_BGP, ver)
 		if err == nil {
 			break

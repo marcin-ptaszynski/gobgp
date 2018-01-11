@@ -622,6 +622,13 @@ message ValidateRibRequest {
 message ValidateRibResponse {
 }
 
+message AFIFamily {
+  uint32 family = 1;
+  bool mp_graceful_restart = 2;
+  bool longlived_graceful_restart = 3;
+  uint32 longlived_restart_time = 4;
+}
+
 message Peer {
   // Note: Regarding to the consistency with OpenConfig model, a list of
   // address family should be removed from here, and should be configured with
@@ -635,9 +642,10 @@ message Peer {
   Timers timers = 7;
   Transport transport = 8;
   RouteServer route_server = 9;
-  GracefulRestart graceful_restart = 10;
-  repeated AfiSafi afi_safis = 11;
-  AddPaths add_paths = 12;
+  repeated AFIFamily afi_families = 10;
+  GracefulRestart graceful_restart = 11;
+  repeated AfiSafi afi_safis = 12;
+  AddPaths add_paths = 13;
 }
 
 message ApplyPolicy {
@@ -678,8 +686,10 @@ message PeerConf {
   string local_address = 15;
   string neighbor_interface = 16;
   string vrf = 17;
-  uint32 allow_own_as = 18;
-  bool replace_peer_as = 19;
+  bool graceful_restart = 18;
+  bool longlived_graceful_restart = 19;
+  uint32 allow_own_as = 20;
+  bool replace_peer_as = 21;
 }
 
 message EbgpMultihop {

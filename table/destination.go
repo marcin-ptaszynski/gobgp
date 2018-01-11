@@ -432,11 +432,11 @@ func (dest *Destination) explicitWithdraw() paths {
 
 		// We do no have any match for this withdraw.
 		if !isFound {
-			log.WithFields(log.Fields{
-				"Topic": "Table",
-				"Key":   dest.GetNlri().String(),
-				"Path":  withdraw,
-			}).Warn("No matching path for withdraw found, may be path was not installed into table")
+			// log.WithFields(log.Fields{
+			// 	"Topic": "Table",
+			// 	"Key":   dest.GetNlri().String(),
+			// 	"Path":  withdraw,
+			// }).Warn("No matching path for withdraw found, may be path was not installed into table")
 		}
 	}
 

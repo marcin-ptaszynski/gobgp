@@ -1147,6 +1147,9 @@ func (s *BgpServer) StartZebraClient(c *config.ZebraConfig) error {
 		}
 		var err error
 		s.zclient, err = newZebraClient(s, c.Url, protos, c.Version, c.NexthopTriggerEnable, c.NexthopTriggerDelay)
+		if s.zclient != nil {
+			s.zclient.config = *c
+		}
 		return err
 	}, false)
 }
@@ -1443,10 +1446,25 @@ func (s *BgpServer) AddVrf(name string, id uint32, rd bgp.RouteDistinguisherInte
 			AS:      s.bgpConfig.Global.Config.As,
 			LocalID: net.ParseIP(s.bgpConfig.Global.Config.RouterId).To4(),
 		}
-		if pathList, e := s.globalRib.AddVrf(name, id, rd, im, ex, pi); e != nil {
+		pathList, e := s.globalRib.AddVrf(name, id, rd, im, ex, pi)
+		if e != nil {
 			return e
-		} else if len(pathList) > 0 {
+		}
+		if len(pathList) > 0 {
 			s.propagateUpdate(nil, pathList)
+		}
+		tbl, _ := s.globalRib.FetchExistingVrf(name)
+		if s.zclient != nil && tbl != nil {
+			for _, dst := range tbl.GetDestinations() {
+				paths := dst.GetAllKnownPathList()
+				fmt.Println(dst, "nlri", dst.GetNlri())
+				if len(paths) == 1 {
+					path := paths[0]
+					path.VrfIds = []uint16{uint16(id)}
+					fmt.Println("path", path)
+				}
+				s.zclient.SendPaths(paths)
+			}
 		}
 		return nil
 	}, true)
@@ -1457,6 +1475,20 @@ func (s *BgpServer) DeleteVrf(name string) error {
 		for _, n := range s.neighborMap {
 			if n.fsm.pConf.Config.Vrf == name {
 				return fmt.Errorf("failed to delete VRF %s: neighbor %s is in use", name, n.ID())
+			}
+		}
+		tbl, id := s.globalRib.FetchExistingVrf(name)
+		if s.zclient != nil && tbl != nil {
+			for _, dst := range tbl.GetDestinations() {
+				paths := dst.GetAllKnownPathList()
+				fmt.Println(dst, "nlri", dst.GetNlri())
+				if len(paths) == 1 {
+					path := paths[0]
+					path.VrfIds = []uint16{uint16(id)}
+					path.IsWithdraw = true
+					fmt.Println("path", path)
+					s.zclient.SendPaths(paths)
+				}
 			}
 		}
 		pathList, err := s.globalRib.DeleteVrf(name)

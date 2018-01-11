@@ -17,13 +17,14 @@ package table
 
 import (
 	_ "fmt"
-	"github.com/osrg/gobgp/packet/bgp"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/osrg/gobgp/packet/bgp"
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 // process BGPUpdate message

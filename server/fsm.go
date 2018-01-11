@@ -17,6 +17,13 @@ package server
 
 import (
 	"fmt"
+	"io"
+	"math/rand"
+	"net"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/eapache/channels"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet/bgp"
@@ -24,12 +31,6 @@ import (
 	"github.com/osrg/gobgp/table"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
-	"io"
-	"math/rand"
-	"net"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type FsmStateReason string
@@ -373,7 +374,7 @@ func (fsm *FSM) connectLoop() error {
 			}).Debugf("failed to connect: %s", err)
 		}
 
-		if fsm.state == bgp.BGP_FSM_ACTIVE && !fsm.pConf.GracefulRestart.State.PeerRestarting {
+		if fsm.state == bgp.BGP_FSM_ACTIVE {
 			timer.Reset(time.Duration(tick) * time.Second)
 		}
 	}
@@ -387,7 +388,7 @@ func (fsm *FSM) connectLoop() error {
 			}).Debug("stop connect loop")
 			return nil
 		case <-timer.C:
-			if fsm.state == bgp.BGP_FSM_ACTIVE && !fsm.pConf.GracefulRestart.State.PeerRestarting {
+			if fsm.state == bgp.BGP_FSM_ACTIVE {
 				go connect()
 			}
 		case <-fsm.getActiveCh:
@@ -787,6 +788,12 @@ func (h *FSMHandler) recvMessageWithError() (*FsmMsg, error) {
 
 	headerBuf, err := readAll(h.conn, bgp.BGP_HEADER_LENGTH)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Topic": "Peer",
+			"Key":   h.fsm.pConf.Config.NeighborAddress,
+			"State": h.fsm.state.String(),
+			"error": err,
+		}).Error("Reading packet failed")
 		sendToErrorCh(FSM_READ_FAILED)
 		return nil, err
 	}
@@ -1155,16 +1162,16 @@ func (h *FSMHandler) opensent() (bgp.FSMState, FsmStateReason) {
 						// To re-establish the session with its peer, the Restarting Speaker
 						// MUST set the "Restart State" bit in the Graceful Restart Capability
 						// of the OPEN message.
-						if fsm.pConf.GracefulRestart.State.PeerRestarting && cap.Flags&0x08 == 0 {
-							log.WithFields(log.Fields{
-								"Topic": "Peer",
-								"Key":   fsm.pConf.State.NeighborAddress,
-								"State": fsm.state.String(),
-							}).Warn("restart flag is not set")
-							// send notification?
-							h.conn.Close()
-							return bgp.BGP_FSM_IDLE, FSM_INVALID_MSG
-						}
+						// if fsm.pConf.GracefulRestart.State.PeerRestarting && cap.Flags&0x08 == 0 {
+						// 	log.WithFields(log.Fields{
+						// 		"Topic": "Peer",
+						// 		"Key":   fsm.pConf.State.NeighborAddress,
+						// 		"State": fsm.state.String(),
+						// 	}).Warn("restart flag is not set")
+						// 	// send notification?
+						// 	h.conn.Close()
+						// 	return bgp.BGP_FSM_IDLE, FSM_INVALID_MSG
+						// }
 						if fsm.pConf.GracefulRestart.Config.NotificationEnabled && cap.Flags&0x04 > 0 {
 							fsm.pConf.GracefulRestart.State.NotificationEnabled = true
 						}
@@ -1531,7 +1538,17 @@ func (h *FSMHandler) established() (bgp.FSMState, FsmStateReason) {
 			}).Warn("hold timer expired")
 			m := bgp.NewBGPNotificationMessage(bgp.BGP_ERROR_HOLD_TIMER_EXPIRED, 0, nil)
 			h.outgoing.In() <- &FsmOutgoingMsg{Notification: m}
-			return bgp.BGP_FSM_IDLE, FSM_HOLD_TIMER_EXPIRED
+			var err FsmStateReason = FSM_HOLD_TIMER_EXPIRED
+			if s := fsm.pConf.GracefulRestart.State; s.Enabled {
+				err = FSM_GRACEFUL_RESTART
+				log.WithFields(log.Fields{
+					"Topic": "Peer",
+					"Key":   fsm.pConf.Config.NeighborAddress,
+					"State": fsm.state.String(),
+				}).Info("peer graceful restart")
+				fsm.gracefulRestartTimer.Reset(time.Duration(fsm.pConf.GracefulRestart.State.PeerRestartTime) * time.Second)
+			}
+			return bgp.BGP_FSM_IDLE, err
 		case <-h.holdTimerResetCh:
 			if fsm.pConf.Timers.State.NegotiatedHoldTime != 0 {
 				holdTimer.Reset(time.Second * time.Duration(fsm.pConf.Timers.State.NegotiatedHoldTime))
@@ -1604,7 +1621,7 @@ func (h *FSMHandler) loop() error {
 	}
 
 	e := time.AfterFunc(time.Second*120, func() {
-		log.WithFields(log.Fields{"Topic": "Peer"}).Fatalf("failed to free the fsm.h.t for %s %s %s", fsm.pConf.State.NeighborAddress, oldState, nextState)
+		log.WithFields(log.Fields{"Topic": "Peer"}).Warn("failed to free the fsm.h.t for %s %s %s", fsm.pConf.State.NeighborAddress, oldState, nextState)
 	})
 	h.t.Wait()
 	e.Stop()

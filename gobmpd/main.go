@@ -19,11 +19,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/osrg/gobgp/packet/bmp"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"os"
 	"strconv"
+
+	"github.com/osrg/gobgp/packet/bmp"
+	log "github.com/sirupsen/logrus"
 )
 
 func connLoop(conn *net.TCPConn) {

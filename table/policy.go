@@ -1277,10 +1277,27 @@ func (c *PrefixCondition) Evaluate(path *Path, _ *PolicyOptions) bool {
 	case bgp.RF_IPv6_UC:
 		masklen = path.GetNlri().(*bgp.IPv6AddrPrefix).Length
 		key = keyf(path.GetNlri().(*bgp.IPv6AddrPrefix).Prefix, int(masklen))
+	case bgp.RF_IPv4_VPN:
+		labelledVPNAddrPrefix := path.GetNlri().(*bgp.LabeledVPNIPAddrPrefix)
+		masklen = labelledVPNAddrPrefix.Length - uint8(8*(labelledVPNAddrPrefix.Labels.Len()+labelledVPNAddrPrefix.RD.Len()))
+		key = keyf(labelledVPNAddrPrefix.Prefix, int(masklen))
+	case bgp.RF_IPv6_VPN:
+		labelledVPNAddrPrefix := path.GetNlri().(*bgp.LabeledVPNIPv6AddrPrefix)
+		masklen = labelledVPNAddrPrefix.Length - uint8(8*(labelledVPNAddrPrefix.Labels.Len()+labelledVPNAddrPrefix.RD.Len()))
+		key = keyf(labelledVPNAddrPrefix.Prefix, int(masklen))
 	default:
 		return false
 	}
-	if family != c.set.family {
+
+	prefixMatchFamily := family
+	// Prefix match is only for IPv4/v6 families
+	if prefixMatchFamily == bgp.RF_IPv4_VPN {
+		prefixMatchFamily = bgp.RF_IPv4_UC
+	} else if prefixMatchFamily == bgp.RF_IPv6_VPN {
+		prefixMatchFamily = bgp.RF_IPv6_UC
+	}
+
+	if prefixMatchFamily != c.set.family {
 		return false
 	}
 
