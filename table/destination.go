@@ -426,6 +426,7 @@ func (dest *Destination) explicitWithdraw() paths {
 				// a path with IsWithdraw flag exists in adj-rib-in
 				path.IsWithdraw = true
 				withdraw.GetNlri().SetPathLocalIdentifier(path.GetNlri().PathLocalIdentifier())
+				withdraw.pathAttrs = path.pathAttrs
 				matches = append(matches, withdraw)
 			}
 		}

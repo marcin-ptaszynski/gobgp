@@ -544,6 +544,9 @@ func (z *zebraClient) loop() {
 					}
 				} else {
 					for _, path := range msg.PathList {
+						if path.GetNlri().String() == "0.0.0.0/0" {
+							continue
+						}
 						if len(path.VrfIds) == 0 {
 							path.VrfIds = []uint16{0}
 						}
@@ -558,9 +561,25 @@ func (z *zebraClient) loop() {
 					}
 				}
 			case *WatchEventUpdate:
-				if body, isWithdraw := newNexthopRegisterBody(msg.PathList, z.nhtManager); body != nil {
-					z.client.SendNexthopRegister(0, body, isWithdraw)
+				for _, path := range msg.PathList {
+					if path.GetNlri().String() != "0.0.0.0/0" {
+						continue
+					}
+					if len(path.VrfIds) == 0 {
+						path.VrfIds = []uint16{0}
+					}
+					for _, i := range path.VrfIds {
+						if body, isWithdraw := newIPRouteBody(pathList{path}); body != nil {
+							z.client.SendIPRoute(i, body, isWithdraw)
+						}
+						if body, isWithdraw := newNexthopRegisterBody(pathList{path}, z.nhtManager); body != nil {
+							z.client.SendNexthopRegister(i, body, isWithdraw)
+						}
+					}
 				}
+				// if body, isWithdraw := newNexthopRegisterBody(msg.PathList, z.nhtManager); body != nil {
+				// 	z.client.SendNexthopRegister(0, body, isWithdraw)
+				// }
 			}
 		}
 	}
