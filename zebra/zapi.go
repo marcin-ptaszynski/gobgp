@@ -713,27 +713,28 @@ func (c *Client) SendInterfaceAdd() error {
 
 func (c *Client) SendRedistribute(t ROUTE_TYPE, vrfId uint16) error {
 	command := REDISTRIBUTE_ADD
-	if c.redistDefault != t {
-		bodies := make([]*RedistributeBody, 0)
-		if c.Version <= 3 {
+	// Enable redistribute bgp.
+	//if c.redistDefault != t {
+	bodies := make([]*RedistributeBody, 0)
+	if c.Version <= 3 {
+		bodies = append(bodies, &RedistributeBody{
+			Redist: t,
+		})
+	} else { // version >= 4
+		command = FRR_REDISTRIBUTE_ADD
+		for _, afi := range []AFI{AFI_IP, AFI_IP6} {
 			bodies = append(bodies, &RedistributeBody{
-				Redist: t,
+				Afi:      afi,
+				Redist:   t,
+				Instance: 0,
 			})
-		} else { // version >= 4
-			command = FRR_REDISTRIBUTE_ADD
-			for _, afi := range []AFI{AFI_IP, AFI_IP6} {
-				bodies = append(bodies, &RedistributeBody{
-					Afi:      afi,
-					Redist:   t,
-					Instance: 0,
-				})
-			}
-		}
-
-		for _, body := range bodies {
-			return c.SendCommand(command, vrfId, body)
 		}
 	}
+
+	for _, body := range bodies {
+		return c.SendCommand(command, vrfId, body)
+	}
+	//}
 
 	return nil
 }
