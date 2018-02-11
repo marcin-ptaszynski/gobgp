@@ -559,6 +559,10 @@ func (z *zebraClient) loop() {
 						if path.GetNlri().String() == "0.0.0.0/0" {
 							continue
 						}
+						if path.IsLocal() {
+							fmt.Println("Skipping Local Path", path.GetNlri().String())
+							continue
+						}
 						if len(path.VrfIds) == 0 {
 							path.VrfIds = []uint16{0}
 						}
@@ -575,6 +579,10 @@ func (z *zebraClient) loop() {
 			case *WatchEventUpdate:
 				for _, path := range msg.PathList {
 					if path.GetNlri().String() != "0.0.0.0/0" {
+						continue
+					}
+					if path.IsLocal() {
+						fmt.Println("Skipping Local Path", path.GetNlri().String())
 						continue
 					}
 					if len(path.VrfIds) == 0 {
