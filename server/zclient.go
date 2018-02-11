@@ -268,6 +268,17 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 	} else if info.MultihopTtl > 0 {
 		flags = zebra.FLAG_INTERNAL
 	}
+	var aux []byte
+	if path.GetAsPathLen() > 0 {
+		aspath := path.GetAsPath()
+		if aspath != nil {
+			aux, _ = aspath.Serialize()
+			if len(aux) > 3 {
+				aux = aux[3:]
+				msgFlags |= zebra.MESSAGE_ASPATH
+			}
+		}
+	}
 	return &zebra.IPRouteBody{
 		Type:         zebra.ROUTE_BGP,
 		Flags:        flags,
@@ -277,6 +288,7 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 		PrefixLength: uint8(plen),
 		Nexthops:     nexthops,
 		Metric:       med,
+		Aux:          aux,
 	}, path.IsWithdraw
 }
 
