@@ -406,7 +406,7 @@ const (
 	FRR_MESSAGE_METRIC   MESSAGE_FLAG = 0x08
 	FRR_MESSAGE_TAG      MESSAGE_FLAG = 0x10
 	FRR_MESSAGE_MTU      MESSAGE_FLAG = 0x20
-	FRR_MESSAGE_SRCPFX   MESSAGE_FLAG = 0x40
+	//FRR_MESSAGE_SRCPFX   MESSAGE_FLAG = 0x40
 )
 
 // Message Flags
@@ -1136,11 +1136,11 @@ func (b *IPRouteBody) Serialize(version uint8) ([]byte, error) {
 	byteLen := (int(b.PrefixLength) + 7) / 8
 	buf = append(buf, b.PrefixLength)
 	buf = append(buf, b.Prefix[:byteLen]...)
-	if b.Message&FRR_MESSAGE_SRCPFX > 0 {
-		byteLen = (int(b.SrcPrefixLength) + 7) / 8
-		buf = append(buf, b.SrcPrefixLength)
-		buf = append(buf, b.SrcPrefix[:byteLen]...)
-	}
+	// if b.Message&FRR_MESSAGE_SRCPFX > 0 {
+	// 	byteLen = (int(b.SrcPrefixLength) + 7) / 8
+	// 	buf = append(buf, b.SrcPrefixLength)
+	// 	buf = append(buf, b.SrcPrefix[:byteLen]...)
+	// }
 
 	if b.Message&MESSAGE_NEXTHOP > 0 {
 		if b.Flags&FLAG_BLACKHOLE > 0 {
@@ -1247,19 +1247,19 @@ func (b *IPRouteBody) DecodeFromBytes(data []byte, version uint8) error {
 	}
 	pos += byteLen
 
-	if b.Message&FRR_MESSAGE_SRCPFX > 0 {
-		b.SrcPrefixLength = data[pos]
-		pos += 1
-		buf = make([]byte, addrLen)
-		byteLen = int((b.SrcPrefixLength + 7) / 8)
-		copy(buf, data[pos:pos+byteLen])
-		if isV4 {
-			b.SrcPrefix = net.IP(buf).To4()
-		} else {
-			b.SrcPrefix = net.IP(buf).To16()
-		}
-		pos += byteLen
-	}
+	// if b.Message&FRR_MESSAGE_SRCPFX > 0 {
+	// 	b.SrcPrefixLength = data[pos]
+	// 	pos += 1
+	// 	buf = make([]byte, addrLen)
+	// 	byteLen = int((b.SrcPrefixLength + 7) / 8)
+	// 	copy(buf, data[pos:pos+byteLen])
+	// 	if isV4 {
+	// 		b.SrcPrefix = net.IP(buf).To4()
+	// 	} else {
+	// 		b.SrcPrefix = net.IP(buf).To16()
+	// 	}
+	// 	pos += byteLen
+	// }
 
 	rest := 0
 	var numNexthop int
