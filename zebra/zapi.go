@@ -372,6 +372,7 @@ const (
 	MESSAGE_METRIC   MESSAGE_FLAG = 0x08
 	MESSAGE_MTU      MESSAGE_FLAG = 0x10
 	MESSAGE_TAG      MESSAGE_FLAG = 0x20
+	MESSAGE_PATH_ID  MESSAGE_FLAG = 0x40
 	MESSAGE_ASPATH   MESSAGE_FLAG = 0x80
 )
 
@@ -1086,6 +1087,7 @@ type IPRouteBody struct {
 	Tag             uint32
 	Api             API_TYPE
 	Aux             []byte
+	PathId          uint32
 }
 
 func (b *IPRouteBody) RouteFamily() bgp.RouteFamily {
@@ -1173,6 +1175,11 @@ func (b *IPRouteBody) Serialize(version uint8) ([]byte, error) {
 	if b.Message&MESSAGE_METRIC > 0 {
 		bbuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(bbuf, b.Metric)
+		buf = append(buf, bbuf...)
+	}
+	if b.Message&MESSAGE_PATH_ID > 0 {
+		bbuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(bbuf, b.PathId)
 		buf = append(buf, bbuf...)
 	}
 	if b.Message&MESSAGE_ASPATH > 0 {

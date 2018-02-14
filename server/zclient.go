@@ -279,6 +279,10 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 			}
 		}
 	}
+	pathId := path.GetNlri().PathIdentifier()
+	if pathId != 0 {
+		msgFlags |= zebra.MESSAGE_PATH_ID
+	}
 	return &zebra.IPRouteBody{
 		Type:         zebra.ROUTE_BGP,
 		Flags:        flags,
@@ -289,6 +293,7 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 		Nexthops:     nexthops,
 		Metric:       med,
 		Aux:          aux,
+		PathId:       pathId,
 	}, path.IsWithdraw
 }
 
