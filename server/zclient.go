@@ -472,6 +472,9 @@ func (z *zebraClient) SendPaths(paths []*table.Path) {
 	if z.watcher == nil {
 		return
 	}
+	z.watcher.realCh <- &WatchEventUpdate{
+		PathList: paths,
+	}
 	z.watcher.realCh <- &WatchEventBestPath{
 		PathList: paths,
 	}
