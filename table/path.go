@@ -428,6 +428,15 @@ func (path *Path) IsLLGRStale() bool {
 	return false
 }
 
+func (path *Path) IsPairBackup() bool {
+	for _, c := range path.GetCommunities() {
+		if c == bgp.COMMUNITY_PAIR_BACKUP {
+			return true
+		}
+	}
+	return false
+}
+
 func (path *Path) GetSourceAs() uint32 {
 	attr := path.getPathAttr(bgp.BGP_ATTR_TYPE_AS_PATH)
 	if attr != nil {
