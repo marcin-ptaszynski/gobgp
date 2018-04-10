@@ -5650,6 +5650,8 @@ const (
 	COMMUNITY_NO_ADVERTISE                                  = 0xffffff02
 	COMMUNITY_NO_EXPORT_SUBCONFED                           = 0xffffff03
 	COMMUNITY_NO_PEER                                       = 0xffffff04
+	COMMUNITY_PAIR_BACKUP                                   = 0x005A005A
+	COMMUNITY_REGION_BACKUP                                 = 0x005A0050
 )
 
 var WellKnownCommunityNameMap = map[WellKnownCommunity]string{
