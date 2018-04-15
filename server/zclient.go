@@ -268,6 +268,11 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 	} else if info.MultihopTtl > 0 {
 		flags = zebra.FLAG_INTERNAL
 	}
+	for _, c := range path.GetCommunities() {
+		if c == bgp.COMMUNITY_REGION_BACKUP {
+			flags |= zebra.FLAG_REJECT
+		}
+	}
 	var aux []byte
 	if path.GetAsPathLen() > 0 {
 		aspath := path.GetAsPath()
