@@ -179,13 +179,13 @@ func (manager *TableManager) AddVrf(name string, id uint32, rd bgp.RouteDistingu
 }
 
 func (manager *TableManager) DeleteVrf(name string) ([]*Path, error) {
-	if _, ok := manager.Vrfs[name]; !ok {
+	vrf, ok := manager.Vrfs[name]
+	if !ok {
 		return nil, fmt.Errorf("vrf %s not found", name)
 	}
-	msgs := make([]*Path, 0)
-	vrf := manager.Vrfs[name]
+	pathList := make([]*Path, 0)
 	for _, t := range manager.Tables {
-		msgs = append(msgs, t.deletePathsByVrf(vrf)...)
+		pathList = append(pathList, t.deletePathsByVrf(vrf)...)
 	}
 	log.WithFields(log.Fields{
 		"Topic":    "Vrf",
@@ -193,11 +193,12 @@ func (manager *TableManager) DeleteVrf(name string) ([]*Path, error) {
 		"Rd":       vrf.Rd,
 		"ImportRt": vrf.ImportRt,
 		"ExportRt": vrf.ExportRt,
-	}).Debugf("delete vrf")
+		"PathList": pathList,
+	}).Debug("delete vrf")
 	delete(manager.Vrfs, name)
 	rtcTable := manager.Tables[bgp.RF_RTC_UC]
-	msgs = append(msgs, rtcTable.deleteRTCPathsByVrf(vrf, manager.Vrfs)...)
-	return msgs, nil
+	pathList = append(pathList, rtcTable.deleteRTCPathsByVrf(vrf, manager.Vrfs)...)
+	return pathList, nil
 }
 
 func (manager *TableManager) calculate(dsts []*Destination) []*Destination {

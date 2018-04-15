@@ -22,8 +22,9 @@ import (
 	"strings"
 
 	"github.com/armon/go-radix"
-	"github.com/osrg/gobgp/packet/bgp"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/osrg/gobgp/packet/bgp"
 )
 
 type LookupOption uint8
@@ -99,25 +100,22 @@ func (t *Table) DeleteDestByPeer(peerInfo *PeerInfo) []*Destination {
 	return dsts
 }
 
-func (t *Table) deletePathsByVrf(vrf *Vrf) []*Path {
-	pathList := make([]*Path, 0)
+func (t *Table) deletePathsByVrf(vrf *Vrf) (pathList []*Path) {
 	for _, dest := range t.destinations {
 		for _, p := range dest.knownPathList {
 			var rd bgp.RouteDistinguisherInterface
-			nlri := p.GetNlri()
-			switch nlri.(type) {
+			switch nlri := p.GetNlri().(type) {
 			case *bgp.LabeledVPNIPAddrPrefix:
-				rd = nlri.(*bgp.LabeledVPNIPAddrPrefix).RD
+				rd = nlri.RD
 			case *bgp.LabeledVPNIPv6AddrPrefix:
-				rd = nlri.(*bgp.LabeledVPNIPv6AddrPrefix).RD
+				rd = nlri.RD
 			case *bgp.EVPNNLRI:
-				rd = nlri.(*bgp.EVPNNLRI).RD()
+				rd = nlri.RD()
 			default:
-				return pathList
+				continue
 			}
-			if p.IsLocal() && vrf.Rd.String() == rd.String() {
+			if rd != nil && vrf.Rd.String() == rd.String() {
 				pathList = append(pathList, p.Clone(true))
-				break
 			}
 		}
 	}
