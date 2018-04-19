@@ -361,9 +361,8 @@ func filterpath(peer *Peer, path, old *table.Path) *table.Path {
 			for _, ext := range path.GetExtCommunities() {
 				for _, p := range peer.adjRibIn.PathList([]bgp.RouteFamily{bgp.RF_RTC_UC}, true) {
 					rt := p.GetNlri().(*bgp.RouteTargetMembershipNLRI).RouteTarget
-					if rt == nil {
-						continue
-					} else if ext.String() == rt.String() {
+					// Note: nil RT means the default route target
+					if rt == nil || ext.String() == rt.String() {
 						ignore = false
 						break
 					}
@@ -1480,11 +1479,6 @@ func (s *BgpServer) DeleteVrf(name string) error {
 			return err
 		}
 		if len(pathList) > 0 {
-			for _, p := range pathList {
-				if peer, ok := s.neighborMap[p.GetSource().Address.String()]; ok {
-					peer.UpdateAdjRibIn([]*table.Path{p})
-				}
-			}
 			s.propagateUpdate(nil, pathList)
 		}
 		return nil

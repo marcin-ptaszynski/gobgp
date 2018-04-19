@@ -699,10 +699,6 @@ func (peer *Peer) ToConfig(getAdvertised bool) *config.Neighbor {
 	return &conf
 }
 
-func (peer *Peer) UpdateAdjRibIn(pathList []*table.Path) {
-	peer.adjRibIn.Update(pathList)
-}
-
 func (peer *Peer) DropAll(rfList []bgp.RouteFamily) {
 	peer.adjRibIn.Drop(rfList)
 }
