@@ -495,6 +495,11 @@ func (z *zebraClient) reconnect() {
 	}
 }
 
+func NlriPrefix(str string) string {
+	nlri := strings.Split(str, ":")
+	return nlri[len(nlri)-1]
+}
+
 func (z *zebraClient) loop() {
 	w := z.server.Watch([]WatchOption{
 		WatchBestPath(true),
@@ -572,7 +577,7 @@ func (z *zebraClient) loop() {
 					}
 				} else {
 					for _, path := range msg.PathList {
-						if path.GetNlri().String() == "0.0.0.0/0" {
+						if NlriPrefix(path.GetNlri().String()) == "0.0.0.0/0" {
 							continue
 						}
 						if path.IsLocal() {
@@ -593,8 +598,19 @@ func (z *zebraClient) loop() {
 					}
 				}
 			case *WatchEventUpdate:
-				for _, path := range msg.PathList {
-					if path.GetNlri().String() != "0.0.0.0/0" {
+				cloned := clonePathList(msg.PathList)
+				for _, p := range cloned {
+					switch p.GetRouteFamily() {
+					case bgp.RF_IPv4_VPN, bgp.RF_IPv6_VPN:
+						for _, vrf := range z.server.globalRib.Vrfs {
+							if vrf.Id != 0 && table.CanImportToVrf(vrf, p) {
+								p.VrfIds = append(p.VrfIds, uint16(vrf.Id))
+							}
+						}
+					}
+				}
+				for _, path := range cloned {
+					if NlriPrefix(path.GetNlri().String()) != "0.0.0.0/0" {
 						continue
 					}
 					if path.IsLocal() {
