@@ -242,7 +242,10 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 			prefix = path.GetNlri().(*bgp.LabeledVPNIPAddrPrefix).IPAddrPrefixDefault.Prefix.To4()
 		}
 		for _, p := range paths {
-			nexthops = append(nexthops, p.GetNexthop().To4())
+			nhop := p.GetNexthop().To4()
+			if nhop != nil {
+				nexthops = append(nexthops, nhop)
+			}
 		}
 	case bgp.RF_IPv6_UC, bgp.RF_IPv6_VPN:
 		if path.GetRouteFamily() == bgp.RF_IPv6_UC {
@@ -251,12 +254,18 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 			prefix = path.GetNlri().(*bgp.LabeledVPNIPv6AddrPrefix).IPAddrPrefixDefault.Prefix.To16()
 		}
 		for _, p := range paths {
-			nexthops = append(nexthops, p.GetNexthop().To16())
+			nhop := p.GetNexthop().To16()
+			if nhop != nil {
+				nexthops = append(nexthops, nhop)
+			}
 		}
 	default:
 		return nil, false
 	}
-	msgFlags := zebra.MESSAGE_NEXTHOP
+	var msgFlags zebra.MESSAGE_FLAG
+	if len(nexthops) > 0 {
+		msgFlags = zebra.MESSAGE_NEXTHOP
+	}
 	plen, _ := strconv.ParseUint(l[1], 10, 8)
 	med, err := path.GetMed()
 	if err == nil {
@@ -472,15 +481,17 @@ func (z *zebraClient) stop() {
 	close(z.dead)
 }
 
-func (z *zebraClient) SendPaths(paths []*table.Path) {
+func (z *zebraClient) SendPaths(paths []*table.Path, vrfs map[string]uint16) {
 	if z.watcher == nil {
 		return
 	}
 	z.watcher.realCh <- &WatchEventUpdate{
 		PathList: paths,
+		Vrf:      vrfs,
 	}
 	z.watcher.realCh <- &WatchEventBestPath{
 		PathList: paths,
+		Vrf:      vrfs,
 	}
 }
 
@@ -523,11 +534,11 @@ func (z *zebraClient) loop() {
 			if tbl != nil {
 				for _, dst := range tbl.GetDestinations() {
 					paths := dst.GetAllKnownPathList()
-					if len(paths) == 1 {
-						path := paths[0]
-						path.VrfIds = []uint16{uint16(vrf.Id)}
+					m := make(map[string]uint16)
+					for _, p := range paths {
+						m[p.GetNlri().String()] = uint16(vrf.Id)
 					}
-					z.SendPaths(paths)
+					z.SendPaths(paths, m)
 				}
 			}
 		}
@@ -595,11 +606,14 @@ func (z *zebraClient) loop() {
 							fmt.Println("Skipping Local Path", path.GetNlri().String())
 							continue
 						}
-						vrfs := []uint16{0}
+						vrfs := []uint16{}
 						if msg.Vrf != nil {
 							if v, ok := msg.Vrf[path.GetNlri().String()]; ok {
 								vrfs = append(vrfs, v)
 							}
+						}
+						if len(vrfs) == 0 {
+							vrfs = append(vrfs, 0)
 						}
 						for _, i := range vrfs {
 							if body, isWithdraw := newIPRouteBody(pathList{path}); body != nil {
@@ -612,18 +626,22 @@ func (z *zebraClient) loop() {
 					}
 				}
 			case *WatchEventUpdate:
-				cloned := clonePathList(msg.PathList)
-				for _, p := range cloned {
-					switch p.GetRouteFamily() {
-					case bgp.RF_IPv4_VPN, bgp.RF_IPv6_VPN:
-						for _, vrf := range z.server.globalRib.Vrfs {
-							if vrf.Id != 0 && table.CanImportToVrf(vrf, p) {
-								p.VrfIds = append(p.VrfIds, uint16(vrf.Id))
+				m := make(map[string]uint16)
+				if msg.Vrf != nil {
+					m = msg.Vrf
+				} else {
+					for _, p := range msg.PathList {
+						switch p.GetRouteFamily() {
+						case bgp.RF_IPv4_VPN, bgp.RF_IPv6_VPN:
+							for _, vrf := range z.server.globalRib.Vrfs {
+								if vrf.Id != 0 && table.CanImportToVrf(vrf, p) {
+									m[p.GetNlri().String()] = uint16(vrf.Id)
+								}
 							}
 						}
 					}
 				}
-				for _, path := range cloned {
+				for _, path := range msg.PathList {
 					if NlriPrefix(path.GetNlri().String()) != "0.0.0.0/0" {
 						continue
 					}
@@ -631,15 +649,19 @@ func (z *zebraClient) loop() {
 						fmt.Println("Skipping Local Path", path.GetNlri().String())
 						continue
 					}
-					if len(path.VrfIds) == 0 {
-						path.VrfIds = []uint16{0}
+					vrfs := []uint16{}
+					if v, ok := m[path.GetNlri().String()]; ok {
+						vrfs = append(vrfs, v)
 					}
-					for _, i := range path.VrfIds {
+					if len(vrfs) == 0 {
+						vrfs = append(vrfs, 0)
+					}
+					for _, vrfId := range vrfs {
 						if body, isWithdraw := newIPRouteBody(pathList{path}); body != nil {
-							z.client.SendIPRoute(i, body, isWithdraw)
+							z.client.SendIPRoute(vrfId, body, isWithdraw)
 						}
 						if body, isWithdraw := newNexthopRegisterBody(pathList{path}, z.nhtManager); body != nil {
-							z.client.SendNexthopRegister(i, body, isWithdraw)
+							z.client.SendNexthopRegister(vrfId, body, isWithdraw)
 						}
 					}
 				}

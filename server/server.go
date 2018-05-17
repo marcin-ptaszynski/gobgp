@@ -1654,13 +1654,11 @@ func (s *BgpServer) AddVrf(name string, id uint32, rd bgp.RouteDistinguisherInte
 		if s.zclient != nil && tbl != nil {
 			for _, dst := range tbl.GetDestinations() {
 				paths := dst.GetAllKnownPathList()
-				fmt.Println(dst, "nlri", dst.GetNlri())
-				if len(paths) == 1 {
-					path := paths[0]
-					path.VrfIds = []uint16{uint16(id)}
-					fmt.Println("path", path)
+				m := make(map[string]uint16)
+				for _, p := range paths {
+					m[p.GetNlri().String()] = uint16(id)
 				}
-				s.zclient.SendPaths(paths)
+				s.zclient.SendPaths(paths, m)
 			}
 		}
 		return nil
@@ -1678,14 +1676,12 @@ func (s *BgpServer) DeleteVrf(name string) error {
 		if s.zclient != nil && tbl != nil {
 			for _, dst := range tbl.GetDestinations() {
 				paths := dst.GetAllKnownPathList()
-				fmt.Println(dst, "nlri", dst.GetNlri())
-				if len(paths) == 1 {
-					path := paths[0]
-					path.VrfIds = []uint16{uint16(id)}
-					path.IsWithdraw = true
-					fmt.Println("path", path)
-					s.zclient.SendPaths(paths)
+				m := make(map[string]uint16)
+				for _, p := range paths {
+					p.IsWithdraw = true
+					m[p.GetNlri().String()] = uint16(id)
 				}
+				s.zclient.SendPaths(paths, m)
 			}
 		}
 		pathList, err := s.globalRib.DeleteVrf(name)
@@ -2631,6 +2627,7 @@ type WatchEventUpdate struct {
 	Init         bool
 	PathList     []*table.Path
 	Neighbor     *config.Neighbor
+	Vrf          map[string]uint16
 }
 
 type WatchEventPeerState struct {
