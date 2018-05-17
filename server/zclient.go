@@ -510,6 +510,14 @@ func NlriPrefix(str string) string {
 	return nlri[len(nlri)-1]
 }
 
+func NlriRD(str string) string {
+	nlri := strings.Split(str, ":")
+	if len(nlri) > 1 {
+		return fmt.Sprintf("%s:%s", nlri[0], nlri[1])
+	}
+	return ""
+}
+
 func (z *zebraClient) loop() {
 	w := z.server.Watch([]WatchOption{
 		WatchBestPath(true),
@@ -652,6 +660,13 @@ func (z *zebraClient) loop() {
 					vrfs := []uint16{}
 					if v, ok := m[path.GetNlri().String()]; ok {
 						vrfs = append(vrfs, v)
+					}
+					if len(vrfs) == 0 {
+						for _, vrf := range z.server.globalRib.Vrfs {
+							if NlriRD(path.GetNlri().String()) == vrf.Rd.String() {
+								vrfs = append(vrfs, uint16(vrf.Id))
+							}
+						}
 					}
 					if len(vrfs) == 0 {
 						vrfs = append(vrfs, 0)
