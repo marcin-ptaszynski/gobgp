@@ -126,35 +126,41 @@ func (p *Path) ToNativePath(option ...ToNativeOption) (*table.Path, error) {
 	nlri.SetPathIdentifier(p.Identifier)
 	nlri.SetPathLocalIdentifier(p.LocalIdentifier)
 	path := table.NewPath(info, nlri, p.IsWithdraw, pattr, t, false)
+
+	// p.ValidationDetail.* are already validated
+	matched, _ := NewROAListFromApiStructList(p.ValidationDetail.Matched)
+	unmatchedAs, _ := NewROAListFromApiStructList(p.ValidationDetail.UnmatchedAs)
+	unmatchedLength, _ := NewROAListFromApiStructList(p.ValidationDetail.UnmatchedLength)
+
 	path.SetValidation(&table.Validation{
 		Status:          config.IntToRpkiValidationResultTypeMap[int(p.Validation)],
 		Reason:          table.IntToRpkiValidationReasonTypeMap[int(p.ValidationDetail.Reason)],
-		Matched:         NewROAListFromApiStructList(p.ValidationDetail.Matched),
-		UnmatchedAs:     NewROAListFromApiStructList(p.ValidationDetail.UnmatchedAs),
-		UnmatchedLength: NewROAListFromApiStructList(p.ValidationDetail.UnmatchedLength),
+		Matched:         matched,
+		UnmatchedAs:     unmatchedAs,
+		UnmatchedLength: unmatchedLength,
 	})
 	path.MarkStale(p.Stale)
 	path.IsNexthopInvalid = p.IsNexthopInvalid
 	return path, nil
 }
 
-func NewROAListFromApiStructList(l []*Roa) []*table.ROA {
+func NewROAListFromApiStructList(l []*Roa) ([]*table.ROA, error) {
 	roas := make([]*table.ROA, 0, len(l))
 	for _, r := range l {
 		ip := net.ParseIP(r.Prefix)
-		rf := func(prefix string) bgp.RouteFamily {
-			a, _, _ := net.ParseCIDR(prefix)
-			if a.To4() != nil {
-				return bgp.RF_IPv4_UC
-			} else {
-				return bgp.RF_IPv6_UC
+		family := bgp.RF_IPv4_UC
+		if ip == nil {
+			return nil, fmt.Errorf("invalid prefix %s", r.Prefix)
+		} else {
+			if ip.To4() == nil {
+				family = bgp.RF_IPv6_UC
 			}
-		}(r.Prefix)
-		afi, _ := bgp.RouteFamilyToAfiSafi(rf)
+		}
+		afi, _ := bgp.RouteFamilyToAfiSafi(family)
 		roa := table.NewROA(int(afi), []byte(ip), uint8(r.Prefixlen), uint8(r.Maxlen), r.As, net.JoinHostPort(r.Conf.Address, r.Conf.RemotePort))
 		roas = append(roas, roa)
 	}
-	return roas
+	return roas, nil
 }
 
 func extractFamilyFromConfigAfiSafi(c *config.AfiSafi) uint32 {
