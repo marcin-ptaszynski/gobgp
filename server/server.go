@@ -1751,6 +1751,16 @@ func (s *BgpServer) Stop() error {
 	}, true)
 }
 
+func filterFamilyList(families []bgp.RouteFamily, f bgp.RouteFamily) []bgp.RouteFamily {
+	l := make([]bgp.RouteFamily, 0, len(families))
+	for _, family := range families {
+		if family != f {
+			l = append(l, family)
+		}
+	}
+	return l
+}
+
 func (s *BgpServer) softResetIn(addr string, family bgp.RouteFamily) error {
 	peers, err := s.addrToPeers(addr)
 	if err != nil {
@@ -1762,6 +1772,7 @@ func (s *BgpServer) softResetIn(addr string, family bgp.RouteFamily) error {
 		if family == bgp.RouteFamily(0) {
 			families = peer.configuredRFlist()
 		}
+		families = filterFamilyList(families, bgp.RF_RTC_UC)
 		for _, path := range peer.adjRibIn.PathList(families, false) {
 			// RFC4271 9.1.2 Phase 2: Route Selection
 			//
@@ -1794,6 +1805,7 @@ func (s *BgpServer) softResetOut(addr string, family bgp.RouteFamily, deferral b
 		if family == bgp.RouteFamily(0) {
 			families = peer.negotiatedRFList()
 		}
+		families = filterFamilyList(families, bgp.RF_RTC_UC)
 
 		if deferral {
 			_, y := peer.fsm.rfMap[bgp.RF_RTC_UC]
