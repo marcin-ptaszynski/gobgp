@@ -300,8 +300,8 @@ func (peer *Peer) markLLGRStale(fs []bgp.RouteFamily) []*table.Path {
 			}
 		}
 		if doStale {
-			p = p.Clone(false)
 			p.SetCommunities([]uint32{bgp.COMMUNITY_LLGR_STALE}, false)
+			p = p.Clone(false)
 		}
 		paths[i] = p
 	}
