@@ -650,6 +650,17 @@ func compareByLLGRStaleCommunity(path1, path2 *Path) *Path {
 	p1 := path1.IsLLGRStale()
 	p2 := path2.IsLLGRStale()
 	if p1 == p2 {
+		if p1 {
+			pair1 := path1.IsPairBackup()
+			pair2 := path2.IsPairBackup()
+			if pair1 == pair2 {
+				return nil
+			}
+			if pair1 {
+				return path1
+			}
+			return path2
+		}
 		return nil
 	} else if p1 {
 		return path2
