@@ -296,13 +296,12 @@ func newIPRouteBody(dst pathList) (body *zebra.IPRouteBody, isWithdraw bool) {
 	}
 	var pathId uint32
 	if plen == 0 {
-		pathId = path.GetNlri().PathIdentifier()
+		pathId = path.GetNlri().PathLocalIdentifier()
 		if pathId == 0 {
-			pathId = path.GetNlri().PathLocalIdentifier()
+			log.Warnf("Skipping zero LocalId default route")
+			return nil, false
 		}
-		if pathId != 0 {
-			msgFlags |= zebra.MESSAGE_PATH_ID
-		}
+		msgFlags |= zebra.MESSAGE_PATH_ID
 	}
 	return &zebra.IPRouteBody{
 		Type:         zebra.ROUTE_BGP,
